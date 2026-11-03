@@ -1,0 +1,21 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {makeBattle,battleAction as act,battleView as view} from '../battle.js';
+test('battle full lifecycle: team balance, likes, representatives, votes, movement and scores',()=>{
+ const r={game:makeBattle(),token:'teacher',closed:false};const advance=()=>act(r,{action:'advance',token:'teacher'});
+ assert.throws(advance,/두 명/);assert.throws(()=>act(r,{action:'advance',token:'fake'}),/선생님/);
+ for(const id of ['a','b','c','d'])act(r,{action:'join',id});assert.deepEqual(view(r).totals,[2,2]);act(r,{action:'join',id:'a'});assert.equal(view(r).players.length,4);
+ advance();assert.throws(()=>act(r,{action:'join',id:'e'}),/시작된/);
+ for(const [id,text] of [['a','근거 A'],['b','근거 B'],['c','근거 C']])act(r,{action:'idea',id,text});
+ assert.throws(()=>act(r,{action:'idea',id:'a',text:'중복'}),/한 번/);
+ const aid=view(r,'a').ideas.find(a=>a.mine).id;
+ assert.throws(()=>act(r,{action:'like',id:'b',idea:aid}),/같은 팀/);
+ act(r,{action:'like',id:'c',idea:aid});assert.equal(view(r).ideas[0].likes,1);
+ assert.equal(view(r).players[0].id,undefined);assert.equal(view(r).ideas[0].author,undefined);
+ advance();assert.equal(r.game.phase,'duel');assert.equal(view(r).representatives[0][0],aid);assert.ok(r.game.deadline>Date.now());
+ assert.throws(()=>act(r,{action:'idea',id:'d',text:'늦음'}),/시간/);
+ advance();for(const id of ['a','b','c'])act(r,{action:'vote',id,side:1});assert.throws(()=>act(r,{action:'vote',id:'a',side:0}),/이미/);
+ advance();act(r,{action:'final',id:'a',side:1});act(r,{action:'final',id:'b',side:1});act(r,{action:'final',id:'c',side:0});
+ assert.throws(()=>act(r,{action:'final',id:'a',side:0}),/이미/);assert.equal(view(r).players[0].changed,true);assert.deepEqual(view(r).finalTotals,[1,2]);assert.deepEqual(view(r).scores,[35,120]);
+ advance();assert.equal(r.closed,true);assert.equal(r.game.phase,'finished');assert.throws(()=>act(r,{action:'final',id:'d',side:0}),/종료/);
+});
