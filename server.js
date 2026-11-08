@@ -8,7 +8,7 @@ let saving=Promise.resolve();
 const save=()=>saving=saving.then(()=>writeFile(new URL('rooms.json',dir),JSON.stringify(rooms)));
 const send=(res,status,data)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(data))};
 const clean=(v,max=300)=>String(v??'').trim().slice(0,max);
-const view=(r,id)=>({game:r.game?battleView(r,id):undefined,type:r.type,question:r.question,options:r.options,words:r.words,arguments:r.arguments,closed:r.closed,count:r.game?Object.keys(r.game.players).length:Object.keys(r.voters).length});
+const view=(r,id,token)=>({game:r.game?battleView(r,id,token===r.token):undefined,type:r.type,question:r.question,options:r.options,words:r.words,arguments:r.arguments,closed:r.closed,count:r.game?Object.keys(r.game.players).length:Object.keys(r.voters).length});
 export const server=http.createServer(async(req,res)=>{try{
  const u=new URL(req.url,'http://localhost');
  if(u.pathname.startsWith('/api/')){
@@ -21,8 +21,8 @@ export const server=http.createServer(async(req,res)=>{try{
  const token=randomBytes(24).toString('hex');rooms[code]={type:b.type,question:clean(b.question),options:options.map(text=>({text,count:0})),words:[],arguments:[],voters:{},closed:false,token,limit:Math.max(0,Math.min(100,Number(b.limit)||0))};if(b.type==='debate'&&b.game)rooms[code].game=makeBattle();await save();return send(res,201,{code,token,...view(rooms[code])});}
  const match=u.pathname.match(/^\/api\/rooms\/([A-Z2-9]{6})(?:\/(respond|close|battle))?$/);if(!match)return send(res,404,{error:'찾을 수 없는 요청입니다.'});
  const r=rooms[match[1]];if(!r)return send(res,404,{error:'참여 코드를 확인해 주세요.'});
- if(req.method==='GET')return send(res,200,view(r,u.searchParams.get('id')));
- if(match[2]==='battle'){if(!r.game)return send(res,400,{error:'게임 방이 아닙니다.'});try{battleAction(r,b)}catch(e){return send(res,400,{error:e.message})}await save();return send(res,200,view(r,b.id));}
+ if(req.method==='GET')return send(res,200,view(r,u.searchParams.get('id'),req.headers['x-teacher-token']));
+ if(match[2]==='battle'){if(!r.game)return send(res,400,{error:'게임 방이 아닙니다.'});try{battleAction(r,b)}catch(e){return send(res,400,{error:e.message})}await save();return send(res,200,view(r,b.id,b.token));}
  if(match[2]==='close'){if(b.token!==r.token)return send(res,403,{error:'선생님만 종료할 수 있습니다.'});r.closed=true;await save();return send(res,200,view(r));}
  if(r.game)return send(res,400,{error:'게임 화면에서 참여해 주세요.'});
  if(match[2]!=='respond')return send(res,405,{error:'지원하지 않는 요청입니다.'});
